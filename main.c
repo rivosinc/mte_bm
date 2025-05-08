@@ -95,7 +95,7 @@ void pin_cpu(size_t core_ID)
 }
 
 int init_mte(uint64_t setup_mte){
-	int mte_en = PR_MTE_TCF_SYNC;
+	int mte_en = PR_MTE_TCF_ASYNC;
 	/*
 	 * Use the architecture dependent information about the processor
 	 * from getauxval() to check if MTE is available.
@@ -109,8 +109,8 @@ int init_mte(uint64_t setup_mte){
 	/*
 	 * Enable MTE with synchronous checking
 	 */
-	if (setup_mte == 2)
-		mte_en = PR_MTE_TCF_ASYNC;
+	if (setup_mte == 1)
+		mte_en = PR_MTE_TCF_SYNC;
 	if (prctl(PR_SET_TAGGED_ADDR_CTRL,
 			PR_TAGGED_ADDR_ENABLE | mte_en | (0xfffe << PR_MTE_TAG_SHIFT),
 			0, 0, 0)){
@@ -177,8 +177,8 @@ int parse_options(int argc, char *argv[])
 	return 0;
 }
 
-void stack_emulation_tag_stores(uint64_t* indices, mte_granule_t *ptr, uint64_t granule_count,
-								int workload_iter)
+void stack_emulation_tag_stores(uint64_t* indices, mte_granule_t *ptr, mte_granule_t *dummy_ptr,
+				uint64_t granule_count,	int workload_iter)
 {
 	unsigned char *ptr_tag1 = NULL;
 	unsigned char *ptr_tag2 = NULL;
@@ -186,8 +186,22 @@ void stack_emulation_tag_stores(uint64_t* indices, mte_granule_t *ptr, uint64_t 
 	unsigned char *ptr_tag4 = NULL;
 	unsigned char *ptr_tag5 = NULL;
 	unsigned char *ptr_tag6 = NULL;
+
+	unsigned char *dummy_ptr_tag1 = NULL;
+	unsigned char *dummy_ptr_tag2 = NULL;
+	unsigned char *dummy_ptr_tag3 = NULL;
+	unsigned char *dummy_ptr_tag4 = NULL;
+	unsigned char *dummy_ptr_tag5 = NULL;
+	unsigned char *dummy_ptr_tag6 = NULL;
+
 	uint64_t *ptr1 = NULL, *ptr2 = NULL, *ptr3 = NULL;
 	uint64_t *ptr4 = NULL, *ptr5 = NULL, *ptr6 = NULL;
+
+	uint64_t *dummy_ptr1 = NULL, *dummy_ptr2 = NULL, *dummy_ptr3 = NULL;
+	uint64_t *dummy_ptr4 = NULL, *dummy_ptr5 = NULL, *dummy_ptr6 = NULL;
+
+	uint64_t buffer_size = granule_count*sizeof(mte_granule_t);
+
 	uint64_t tag1 = 0, tag2 = 0, tag3 = 0, tag4 = 0, tag5 = 0, tag6 = 0;
 	int obj1_select = 0, obj2_select = 0, obj3_select = 0;
 	int obj4_select = 0, obj5_select = 0, obj6_select = 0;
@@ -196,7 +210,11 @@ void stack_emulation_tag_stores(uint64_t* indices, mte_granule_t *ptr, uint64_t 
 
 	for(int j = 0; j < workload_iter; j++){
 		create_random_chain(indices, granule_count);
-		__clear_cache(ptr, (char *) ptr + (granule_count*sizeof(mte_granule_t)));
+		__clear_cache(ptr, (char *) ptr + buffer_size);
+
+		if (dummy_ptr)
+			__clear_cache(ptr, (char *) dummy_ptr + buffer_size);
+
 		rand_val = (uint64_t) rand();
 		rand_val2 = (uint64_t) rand();
 
@@ -215,6 +233,13 @@ void stack_emulation_tag_stores(uint64_t* indices, mte_granule_t *ptr, uint64_t 
 			ptr5 = &ptr[indices[i+4]].obj[obj5_select];
 			ptr6 = &ptr[indices[i+5]].obj[obj6_select];
 
+			dummy_ptr1 = &dummy_ptr[indices[i]].obj[obj1_select];
+			dummy_ptr2 = &dummy_ptr[indices[i+1]].obj[obj2_select];
+			dummy_ptr3 = &dummy_ptr[indices[i+2]].obj[obj3_select];
+			dummy_ptr4 = &dummy_ptr[indices[i+3]].obj[obj4_select];
+			dummy_ptr5 = &dummy_ptr[indices[i+4]].obj[obj5_select];
+			dummy_ptr6 = &dummy_ptr[indices[i+5]].obj[obj6_select];
+
 			ptr1 = (uint64_t *) insert_random_tag((unsigned char *) ptr1);
 			tag1 = (((uint64_t) ptr1) >> 56) & 0xf;
 			//tag2 = tag1 ? tag1++ : 0;
@@ -230,6 +255,13 @@ void stack_emulation_tag_stores(uint64_t* indices, mte_granule_t *ptr, uint64_t 
 			ptr5 = (uint64_t *) insert_my_tag((unsigned char *) ptr5, tag5);
 			ptr6 = (uint64_t *) insert_my_tag((unsigned char *) ptr6, tag6);
 
+			dummy_ptr1 = (uint64_t *) insert_my_tag((unsigned char *) dummy_ptr1, tag1);
+			dummy_ptr2 = (uint64_t *) insert_my_tag((unsigned char *) dummy_ptr2, tag2);
+			dummy_ptr3 = (uint64_t *) insert_my_tag((unsigned char *) dummy_ptr3, tag3);
+			dummy_ptr4 = (uint64_t *) insert_my_tag((unsigned char *) dummy_ptr4, tag4);
+			dummy_ptr5 = (uint64_t *) insert_my_tag((unsigned char *) dummy_ptr5, tag5);
+			dummy_ptr6 = (uint64_t *) insert_my_tag((unsigned char *) dummy_ptr6, tag6);
+
 			ptr_tag1 = (unsigned char *)ALIGN_16BYTE((unsigned long long)ptr1);
 			ptr_tag2 = (unsigned char *)ALIGN_16BYTE((unsigned long long)ptr2);
 			ptr_tag3 = (unsigned char *)ALIGN_16BYTE((unsigned long long)ptr3);
@@ -237,12 +269,28 @@ void stack_emulation_tag_stores(uint64_t* indices, mte_granule_t *ptr, uint64_t 
 			ptr_tag5 = (unsigned char *)ALIGN_16BYTE((unsigned long long)ptr5);
 			ptr_tag6 = (unsigned char *)ALIGN_16BYTE((unsigned long long)ptr6);
 
-			set_tag(ptr_tag1);
-			set_tag(ptr_tag2);
-			set_tag(ptr_tag3);
-			set_tag(ptr_tag4);
-			set_tag(ptr_tag5);
-			set_tag(ptr_tag6);
+			dummy_ptr_tag1 = (unsigned char *)ALIGN_16BYTE((unsigned long long)dummy_ptr1);
+			dummy_ptr_tag2 = (unsigned char *)ALIGN_16BYTE((unsigned long long)dummy_ptr2);
+			dummy_ptr_tag3 = (unsigned char *)ALIGN_16BYTE((unsigned long long)dummy_ptr3);
+			dummy_ptr_tag4 = (unsigned char *)ALIGN_16BYTE((unsigned long long)dummy_ptr4);
+			dummy_ptr_tag5 = (unsigned char *)ALIGN_16BYTE((unsigned long long)dummy_ptr5);
+			dummy_ptr_tag6 = (unsigned char *)ALIGN_16BYTE((unsigned long long)dummy_ptr6);
+
+			if (dummy_ptr == NULL) {
+				set_tag(ptr_tag1);
+				set_tag(ptr_tag2);
+				set_tag(ptr_tag3);
+				set_tag(ptr_tag4);
+				set_tag(ptr_tag5);
+				set_tag(ptr_tag6);
+			} else {
+				set_tag(dummy_ptr_tag1);
+				set_tag(dummy_ptr_tag2);
+				set_tag(dummy_ptr_tag3);
+				set_tag(dummy_ptr_tag4);
+				set_tag(dummy_ptr_tag5);
+				set_tag(dummy_ptr_tag6);
+			}
 
 			// Load followed by store on stack object
 			*ptr1 += rand_val;
@@ -258,6 +306,8 @@ void stack_emulation_tag_stores(uint64_t* indices, mte_granule_t *ptr, uint64_t 
 			rand_val2 = *ptr3 + *ptr6;
 			// final sink into total
 			total = rand_val + rand_val2;
+			//asm("ldg %0, [%0]" : "+r" (tag_val));
+			//printf("tag for ptr 6 is %p\n", tag_val);
 		}
 	}
 }
@@ -271,13 +321,20 @@ void mte_test_bm(uint64_t buffer_size, uint64_t outer_loop, uint64_t inner_loop,
 	if (mte_setup != 0)
 		mte_protection |= PROT_MTE;
 
-	unsigned char *buffer = NULL;
+	unsigned char *buffer = NULL, *buffer_fake = NULL;
 	unsigned char *indices = NULL;
 
 	uint64_t granule_count = buffer_size/sizeof(mte_granule_t);
 	uint64_t indices_size = granule_count * sizeof(uint64_t);
 
 	buffer = mmap(NULL, buffer_size, mte_protection, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+	/* setup a fake buffer only for settag operation */
+	if (mte_setup == 0) {
+		buffer_fake = mmap(NULL, buffer_size, protection | PROT_MTE, MAP_PRIVATE |
+				MAP_ANONYMOUS, -1, 0);
+	}
+
 	indices = mmap(NULL, indices_size, protection, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0 );
 
 	for (int i = 0; i < outer_loop; i++) {
@@ -285,15 +342,19 @@ void mte_test_bm(uint64_t buffer_size, uint64_t outer_loop, uint64_t inner_loop,
 
 		//__clear_cache(buffer, buffer + buffer_size);
 		MEASURE_TIME(
-			stack_emulation_tag_stores((uint64_t*)indices, (mte_granule_t *)buffer, granule_count, 
-										inner_loop);
-			, 
+			stack_emulation_tag_stores((uint64_t*)indices, (mte_granule_t *)buffer,
+						(mte_granule_t *) buffer_fake, granule_count,
+						inner_loop);
+			,
 			"MTE_tagstore: Emulation of Stack objects protected"
 		);
 
 		/* Ensure that mapping goes away from TLBs before next iteration */
 		int ret = madvise(buffer, buffer_size, MADV_DONTNEED);
 		ret |= madvise(indices, indices_size, MADV_DONTNEED);
+
+		if (buffer_fake)
+			ret |= madvise(buffer_fake, buffer_size, MADV_DONTNEED);
 
 		if (ret != 0) {
 			perror("madvise failed");
