@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025 Rivos Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Compiler and flags
 CC := clang
 CFLAGS := -v -target aarch64-linux-android34 -march=armv8.5-a+memtag -static -O0

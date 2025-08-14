@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2025 Rivos Inc.
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 Tool for experimenting with publicly availabe memory tagging hardware. This
 is created to create a microbenchmark to evaluate value of elide tag check
 mechanism in future memory tagging hardware. In short, elide tag check is a
