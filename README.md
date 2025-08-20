@@ -3,8 +3,11 @@ SPDX-FileCopyrightText: 2025 Rivos Inc.
 
 SPDX-License-Identifier: Apache-2.0
 -->
+# README
 
-Tool for experimenting with publicly availabe memory tagging hardware. This
+[![REUSE status](https://api.reuse.software/badge/github.com/rivosinc/mte_bm)](https://api.reuse.software/info/github.com/rivosinc/mte_bm)
+
+Tool for experimenting with publicly available memory tagging hardware. This
 is created to create a microbenchmark to evaluate value of elide tag check
 mechanism in future memory tagging hardware. In short, elide tag check is a
 mechanism using which memory access on a page marked as a tagged page in
